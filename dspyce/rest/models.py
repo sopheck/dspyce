@@ -173,6 +173,7 @@ class RestAPI:
                 logging.info(f'The authentication as "{self.username}" was successfully')
                 # basic way to wait "session_timeout" seconds in a thread and then refresh login token
                 keep_session_alive = threading.Timer(self.session_refresh_timeout, self.keep_session_alive)
+                keep_session_alive.daemon = True
                 keep_session_alive.start()
                 return True
         except requests.exceptions.JSONDecodeError as e:
