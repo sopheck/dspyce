@@ -155,8 +155,9 @@ class RestAPI:
         auth_url = f'{self.api_endpoint}/authn/login'
         if refresh_current_session:
             logging.info(f'Trying to refresh the current session against the REST-API "{self.api_endpoint}"')
+            pre_req = self.session.post(auth_url)
+            self.update_csrf_token(pre_req)
             req = self.session.post(auth_url)
-            self.update_csrf_token(req)
         else:
             logging.info(f'Trying to authenticate against the REST-API "{self.api_endpoint}", with user {self.username}')
             req = self.session.post(auth_url)
