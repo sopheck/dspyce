@@ -47,8 +47,8 @@ class RestAPI:
     """The password of the user communicating with the endpoint."""
     session: requests.sessions.Session
     """The active session."""
-    session_refresh_timeout: int = (60 * 28)
-    """The session refresh timeout. The time after the session is refreshed. Default is 28 minutes."""
+    session_refresh_timeout: int
+    """The session refresh timeout. The time after the session is refreshed."""
     authenticated: bool = False
     """Provides information about the authentication status."""
     dspace_version: str
@@ -57,7 +57,7 @@ class RestAPI:
     """The number of worker threads used by the ThreadPoolExecutor."""
 
     def __init__(self, api_endpoint: str, username: str = None, password: str = None,
-                 log_level: int | str = logging.INFO, log_file: str = None, workers: int = 0):
+                 log_level: int | str = logging.INFO, log_file: str = None, workers: int = 0, session_refresh_timeout: int = (60 * 28)):
         """
         Creates a new object of the RestAPI class using
 
@@ -70,6 +70,8 @@ class RestAPI:
             console.
         :param workers: The number of worker threads to use, if this value equals 0 no ThreadPoolExecutor is used.
             Default is 0.
+        :param session_refresh_timeout: The time after the session is refreshed. Default is 28 minutes, which is 2
+            minutes before the default session timeout of 30 minutes in DSpace. Default is 60*28
         """
         log_level_types = {'DEBUG': logging.DEBUG, 'INFO': logging.INFO, 'WARNING': logging.WARNING,
                            'ERROR': logging.ERROR, 'CRITICAL': logging.CRITICAL}
@@ -89,6 +91,7 @@ class RestAPI:
             self.dspace_version = endpoint_info['dspaceVersion']
         self.username = username
         self.password = password
+        self.session_refresh_timeout = session_refresh_timeout
         self.req_headers = {'Content-type': 'application/json', 'User-Agent': 'dspyce/0.2'}
         if username is not None and password is not None:
             self.authenticated = self.authenticate_api()
@@ -155,8 +158,9 @@ class RestAPI:
         auth_url = f'{self.api_endpoint}/authn/login'
         if refresh_current_session:
             logging.info(f'Trying to refresh the current session against the REST-API "{self.api_endpoint}"')
+            pre_req = self.session.post(auth_url)
+            self.update_csrf_token(pre_req)
             req = self.session.post(auth_url)
-            self.update_csrf_token(req)
         else:
             logging.info(f'Trying to authenticate against the REST-API "{self.api_endpoint}", with user {self.username}')
             req = self.session.post(auth_url)
@@ -172,6 +176,7 @@ class RestAPI:
                 logging.info(f'The authentication as "{self.username}" was successfully')
                 # basic way to wait "session_timeout" seconds in a thread and then refresh login token
                 keep_session_alive = threading.Timer(self.session_refresh_timeout, self.keep_session_alive)
+                keep_session_alive.daemon = True
                 keep_session_alive.start()
                 return True
         except requests.exceptions.JSONDecodeError as e:
